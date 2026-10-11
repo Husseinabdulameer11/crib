@@ -183,6 +183,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           build-contexts: gram=./gram-src
@@ -204,6 +206,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: crib-*        # only our builds, not docker's .dockerbuild record
           merge-multiple: true
       - name: Checksums
         run: |
