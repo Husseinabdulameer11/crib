@@ -1,0 +1,24 @@
+// Codespaces / VS Code dev container for Crib.
+//
+// Opens with gram cloned next to Crib (../gram, or ~/gram), gram installed in
+// ~/.local, and Crib built and installed, so `crib` works in the terminal
+// right away. After editing src/crib.gram or the C sources:  make install
+{
+  "name": "Crib",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.makefile-tools"
+      ]
+    },
+    "codespaces": {
+      "openFiles": ["examples/language.crib", "README.md"]
+    }
+  }
+}

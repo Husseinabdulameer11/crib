@@ -1,0 +1,45 @@
+# A tour of Crib, the language itself.
+
+# Numbers: decimal, 0x hex, 0b binary. Semicolons are optional.
+a = 0x1f; b = 0b1010
+show a, b, a xor b
+
+# `mod` applies to the whole expression on its left
+show 3 + 4 * 5 mod 7          # (3 + 4*5) mod 7
+show 3^200 mod 101            # square-and-multiply, never computes 3^200
+show 3^-1 mod 101             # negative power = inverse
+show 10 / 4 mod 13            # division = multiplication by 4^-1
+show 17 / 5, 17 % 5           # without mod: integer division and remainder
+
+# Tuples, lists and destructuring
+g, x, y = egcd(240, 46)
+show g, x, y
+check 240 * x + 46 * y == g
+primes = [2, 3, 5, 7, 11]
+show primes[2], len(primes), primes + [13]
+
+# Functions: one-liners with =, or blocks with return
+fn sq(x) = x * x
+fn order(a, n) {
+  k = 1
+  v = a mod n
+  while v != 1 { v = v * a mod n; k = k + 1 }
+  return k
+}
+show sq(12), order(2, 11), ord(3, 7)
+
+# Loops and if: the primitive roots mod 11
+for g in 2..10 {
+  if order(g, 11) == 10 { print g, "is a primitive root mod 11" }
+}
+
+# Polynomials over GF(2), with + (= xor), * and mod
+f = poly(x^4 + x + 1)
+show f * f, poly(x^7 + 1) mod f, deg(f)
+
+# Number theory helpers
+show phi(221), factor(360), isprime(65537), crt([2, 3, 2], [3, 5, 7])
+show bin(13, 8), hex(48879), lfsr(f, 1, 15)
+
+# check prints [ok], or [FAIL] with both sides
+check 2^10 mod 1000 == 24

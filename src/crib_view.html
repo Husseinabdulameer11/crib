@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crib Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: source listing pinned on the left like an exam margin, the run's
+   results streaming down the right; each simulation is an instrument panel. */
+:root {
+  --paper: #eef3f5;
+  --panel: #ffffff;
+  --ink: #14212b;
+  --muted: #5a6a75;
+  --rule: #d3dde2;
+  --accent: #0e6a88;
+  --signal: #b25a07;
+  --signal-soft: #fbe9d4;
+  --ok: #2c7a4b;
+  --warn: #9a6a00;
+  --bad: #b42318;
+  --bad-soft: #fbe0dc;
+  --ok-soft: #dcf0e3;
+  --warn-soft: #f6ecc8;
+  --hl: #fff3c4;
+  --display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1418; --panel: #151f25; --ink: #e2eaee; --muted: #93a3ad; --rule: #2a3741;
+    --accent: #4fb6d8; --signal: #f0a548; --signal-soft: #3a2a14; --ok: #62c48e; --warn: #e2b54a;
+    --bad: #f3796c; --bad-soft: #3d1d1a; --ok-soft: #173326; --warn-soft: #362d12; --hl: #3a3415;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1418; --panel: #151f25; --ink: #e2eaee; --muted: #93a3ad; --rule: #2a3741;
+  --accent: #4fb6d8; --signal: #f0a548; --signal-soft: #3a2a14; --ok: #62c48e; --warn: #e2b54a;
+  --bad: #f3796c; --bad-soft: #3d1d1a; --ok-soft: #173326; --warn-soft: #362d12; --hl: #3a3415;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 18px; }
+header.top h1 { font: 800 1.6rem/1.1 var(--display); margin: 0; letter-spacing: -0.01em; }
+header.top .file { font: 600 0.9rem var(--mono); color: var(--accent); }
+header.top .meta { color: var(--muted); font-size: 0.85rem; }
+.grid { display: grid; grid-template-columns: minmax(0, 34%) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.source { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px);
+  overflow: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+@media (max-width: 860px) { .source { position: static; max-height: 50vh; } }
+.source summary { cursor: pointer; padding: 10px 14px; font: 600 0.8rem var(--body); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--rule); }
+.code { font: 12.5px/1.55 var(--mono); padding: 8px 0; margin: 0; }
+.code div { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); white-space: pre-wrap; word-break: break-word; padding-right: 12px; }
+.code > div > span:first-child { color: var(--muted); text-align: right; padding-right: 1em; user-select: none; }
+.code div.on { background: var(--hl); }
+.code .cm { color: var(--muted); font-style: italic; }
+.code .kw { color: var(--accent); font-weight: 600; }
+.code .nm { color: var(--signal); }
+.feed { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.console { font: 13px/1.6 var(--mono); padding: 4px 2px; min-width: 0; }
+.console div { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); gap: 0; word-break: break-word; }
+.ln { color: var(--muted); background: none; border: 0; font: inherit; cursor: pointer; text-align: right; padding: 0 1em 0 0; }
+.ln:hover, .ln:focus-visible { color: var(--accent); outline: none; text-decoration: underline; }
+.console .ok { color: var(--ok); }
+.console .bad { color: var(--bad); font-weight: 600; }
+.sim { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; min-width: 0; overflow: hidden; }
+.sim > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 16px 10px; border-bottom: 1px solid var(--rule); }
+.sim > header h2 { font: 700 1.05rem/1.3 var(--display); margin: 0; flex: 1 1 18em; min-width: 0; }
+.kind { font: 600 0.68rem var(--body); text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+.sim .src { font: 12px var(--mono); color: var(--muted); padding: 8px 16px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.sim .src code { color: var(--ink); word-break: break-word; }
+.viz { padding: 14px 16px 4px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.lines { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; min-width: 0; }
+.step { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 10px; }
+.step b { font: 600 0.72rem/2 var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.step span, .result span, .note span { font-family: var(--mono); font-size: 12.5px; word-break: break-word; }
+.note { color: var(--muted); padding-left: calc(7.5em + 10px); }
+.result { padding-left: calc(7.5em + 10px); font-weight: 600; }
+.result span::before { content: "\21D2  "; color: var(--accent); }
+@media (max-width: 520px) { .step { grid-template-columns: minmax(0, 1fr); gap: 0; } .note, .result { padding-left: 0; } }
+.tbl { overflow-x: auto; margin: 6px 0 8px; }
+table { border-collapse: collapse; font: 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+th { font: 600 0.7rem var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: right; padding: 3px 10px; border-bottom: 1px solid var(--rule); }
+td { text-align: right; padding: 2px 10px; white-space: nowrap; }
+tr.cur td { background: var(--hl); }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button.c { font: 600 12px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 5px; padding: 5px 11px; cursor: pointer; }
+button.c:hover { border-color: var(--accent); }
+button.c:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.c.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.readout { font: 12.5px var(--mono); color: var(--muted); word-break: break-all; }
+.readout b { color: var(--ink); font-weight: 600; }
+.svgbox { overflow-x: auto; }
+svg text { font-family: var(--mono); }
+.rings { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.rings svg { max-width: 100%; height: auto; }
+.rings figure { margin: 0; max-width: 100%; display: flex; flex-direction: column; align-items: center; }
+.rings figcaption { font: 11px var(--mono); color: var(--muted); }
+.ks { font: 13px var(--mono); letter-spacing: 0.12em; color: var(--signal); word-break: break-all; }
+.bits { display: flex; flex-wrap: wrap; gap: 3px; }
+.bits span { width: 26px; height: 30px; display: grid; place-items: center; border: 1px solid var(--rule); border-radius: 4px; font: 600 13px var(--mono); }
+.bits span.one { background: var(--signal-soft); color: var(--signal); border-color: var(--signal); }
+.bits span.cur { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bits span.done { opacity: 0.45; }
+.modes { overflow-x: auto; }
+.modes table td, .modes table th { text-align: center; padding: 4px 6px; }
+.modes td.mn { text-align: left; font: 700 12px var(--body); }
+.cell { display: inline-flex; flex-direction: column; gap: 3px; align-items: center; padding: 4px 6px; border-radius: 5px; }
+.cell.ok { background: var(--ok-soft); }
+.cell.warn { background: var(--warn-soft); }
+.cell.bad { background: var(--bad-soft); }
+.strip { display: grid; grid-template-columns: repeat(16, 4px); gap: 1px; }
+.strip i { height: 8px; background: var(--rule); }
+.strip i.d { background: var(--bad); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+.flipmark { color: var(--bad); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Crib Workbench</h1>
+    <span class="file" id="file"></span>
+    <span class="meta" id="meta"></span>
+  </header>
+  <div class="grid">
+    <details class="source" id="srcbox" open>
+      <summary>Program</summary>
+      <pre class="code" id="code"></pre>
+    </details>
+    <main class="feed" id="feed"></main>
+  </div>
+</div>
+<script>
+const CRIB = /*CRIB_DATA*/;
+
+const NS = "http://www.w3.org/2000/svg";
+const $ = (tag, attrs, ...kids) => {
+  const e = document.createElement(tag);
+  for (const k in attrs || {}) {
+    if (k === "class") e.className = attrs[k];
+    else if (k === "text") e.textContent = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of kids) if (c != null) e.append(c);
+  return e;
+};
+const S = (tag, attrs, ...kids) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs || {}) { if (k === "text") e.textContent = attrs[k]; else e.setAttribute(k, attrs[k]); }
+  for (const c of kids) if (c != null) e.append(c);
+  return e;
+};
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const mod = (a, m) => ((a % m) + m) % m;
+function inv(a, m) {
+  let [r0, r1, s0, s1] = [mod(a, m), m, 1, 0];
+  while (r1) { const q = Math.floor(r0 / r1); [r0, r1] = [r1, r0 - q * r1]; [s0, s1] = [s1, s0 - q * s1]; }
+  return r0 === 1 ? mod(s0, m) : null;
+}
+const bin = (x, w) => x.toString(2).padStart(w, "0");
+
+/* ---------- source listing ---------- */
+const codeEl = document.getElementById("code");
+const srcLines = CRIB.source.replace(/\r/g, "").split("\n");
+if (srcLines.length && srcLines[srcLines.length - 1] === "") srcLines.pop();
+const KW = /\b(fn|if|else|while|for|in|return|sim|show|print|check|mod|xor|and|or|not|poly)\b/g;
+function highlight(line) {
+  const frag = document.createDocumentFragment();
+  let code = line, comment = "";
+  const ci = line.search(/#|\/\//);
+  if (ci >= 0 && !/"[^"]*$/.test(line.slice(0, ci))) { code = line.slice(0, ci); comment = line.slice(ci); }
+  let last = 0;
+  const re = /\b(fn|if|else|while|for|in|return|sim|show|print|check|mod|xor|and|or|not|poly)\b|\b(0x[0-9a-fA-F]+|0b[01]+|\d+)\b/g;
+  let m;
+  while ((m = re.exec(code))) {
+    frag.append(code.slice(last, m.index));
+    frag.append($("span", { class: m[1] ? "kw" : "nm", text: m[0] }));
+    last = m.index + m[0].length;
+  }
+  frag.append(code.slice(last));
+  if (comment) frag.append($("span", { class: "cm", text: comment }));
+  return frag;
+}
+srcLines.forEach((l, i) => codeEl.append($("div", { id: "L" + (i + 1) }, $("span", { text: String(i + 1) }), $("span", {}, highlight(l)))));
+function gotoLine(n) {
+  document.querySelectorAll(".code div.on").forEach(d => d.classList.remove("on"));
+  const el = document.getElementById("L" + n);
+  if (!el) return;
+  document.getElementById("srcbox").open = true;
+  el.classList.add("on");
+  el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+}
+const lnButton = n => $("button", { class: "ln", title: "Show line " + n + " in the program", onclick: () => gotoLine(n), text: n ? String(n) : "" });
+
+document.getElementById("file").textContent = CRIB.file;
+const nsim = CRIB.items.filter(i => i.type !== "text").length;
+document.getElementById("meta").textContent = srcLines.length + " lines · " + nsim + " simulation" + (nsim === 1 ? "" : "s");
+
+/* ---------- generic lines (steps, notes, tables) ---------- */
+function renderLines(lines, hook) {
+  const box = $("div", { class: "lines" });
+  for (const l of lines) {
+    if (l.k === "step") box.append($("div", { class: "step" }, $("b", { text: l.label }), $("span", { text: l.text })));
+    else if (l.k === "note") box.append($("div", { class: "note" }, $("span", { text: l.text })));
+    else if (l.k === "result") box.append($("div", { class: "result" }, $("span", { text: l.text })));
+    else if (l.k === "table") {
+      const t = $("table", {}, $("thead", {}, $("tr", {}, ...l.cols.map(c => $("th", { text: c })))));
+      const tb = $("tbody");
+      l.rows.forEach(r => tb.append($("tr", {}, ...r.map(c => $("td", { text: c })))));
+      t.append(tb);
+      if (hook) hook(t);
+      box.append($("div", { class: "tbl" }, t));
+    }
+  }
+  return box;
+}
+
+function player(onStep, onReset, total) {
+  let timer = null, i = 0;
+  const playBtn = $("button", { class: "c primary", text: "Play" });
+  const stop = () => { clearInterval(timer); timer = null; playBtn.textContent = "Play"; };
+  const step = () => { if (total() != null && i >= total()) { stop(); return; } i++; onStep(i); };
+  playBtn.onclick = () => {
+    if (timer) { stop(); return; }
+    if (total() != null && i >= total()) { i = 0; onReset(); }
+    playBtn.textContent = "Pause";
+    timer = setInterval(step, reduceMotion ? 900 : 520);
+  };
+  const el = $("div", { class: "controls" },
+    playBtn,
+    $("button", { class: "c", text: "Step", onclick: () => { stop(); step(); } }),
+    $("button", { class: "c", text: "Reset", onclick: () => { stop(); i = 0; onReset(); } }));
+  return { el, set: v => { i = v; }, stop };
+}
+
+/* ---------- LFSR ---------- */
+function vizLFSR(d) {
+  const L = d.L, mask = (1 << L) - 1, taps = d.taps;
+  const next = s => { let nb = 0; for (let j = 0; j < L; j++) if (taps[j]) nb ^= (s >> (L - 1 - j)) & 1; return ((s << 1) & mask) | nb; };
+  const box = $("div", { class: "viz" });
+
+  // register: cells s[n] .. s[n+L-1], output leaves left, new bit enters right
+  const cw = 48, ch = 40, x0 = 70, y0 = 30, W = x0 + L * cw + 90, H = 150;
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "LFSR register" });
+  const defs = S("defs", {}, S("marker", { id: "ah" + d._id, viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" },
+    S("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--muted)" })));
+  svg.append(defs);
+  const arrow = `url(#ah${d._id})`;
+  const cells = [], texts = [];
+  for (let i = 0; i < L; i++) {
+    const x = x0 + i * cw;
+    const r = S("rect", { x, y: y0, width: cw - 4, height: ch, rx: 5, fill: "var(--panel)", stroke: "var(--ink)", "stroke-width": 1.2 });
+    const t = S("text", { x: x + (cw - 4) / 2, y: y0 + ch / 2 + 6, "text-anchor": "middle", "font-size": 18, "font-weight": 600, fill: "var(--ink)", text: "0" });
+    svg.append(r, t, S("text", { x: x + (cw - 4) / 2, y: y0 - 8, "text-anchor": "middle", "font-size": 10, fill: "var(--muted)", text: i ? `s[n+${i}]` : "s[n]" }));
+    cells.push(r); texts.push(t);
+  }
+  const busY = y0 + ch + 34, xr = x0 + L * cw - 4, xorX = xr + 34;
+  let tapXs = [];
+  for (let j = 0; j < L; j++) if (taps[j]) tapXs.push(x0 + j * cw + (cw - 4) / 2);
+  for (const tx of tapXs) svg.append(S("line", { x1: tx, y1: y0 + ch, x2: tx, y2: busY, stroke: "var(--accent)", "stroke-width": 1.6 }), S("circle", { cx: tx, cy: busY, r: 3, fill: "var(--accent)" }));
+  if (tapXs.length) svg.append(S("line", { x1: Math.min(...tapXs), y1: busY, x2: xorX - 11, y2: busY, stroke: "var(--accent)", "stroke-width": 1.6 }));
+  svg.append(S("circle", { cx: xorX, cy: busY, r: 11, fill: "var(--panel)", stroke: "var(--accent)", "stroke-width": 1.6 }),
+    S("path", { d: `M${xorX - 7},${busY} h14 M${xorX},${busY - 7} v14`, stroke: "var(--accent)", "stroke-width": 1.6 }),
+    S("path", { d: `M${xorX},${busY - 11} V${y0 + ch / 2} H${xr + 2}`, fill: "none", stroke: "var(--accent)", "stroke-width": 1.6, "marker-end": arrow }));
+  const newBit = S("text", { x: xorX + 16, y: busY + 4, "font-size": 12, fill: "var(--signal)", "font-weight": 600, text: "" });
+  svg.append(newBit, S("text", { x: xorX + 16, y: busY + 20, "font-size": 10, fill: "var(--muted)", text: "new bit" }));
+  svg.append(S("line", { x1: x0 - 2, y1: y0 + ch / 2, x2: 18, y2: y0 + ch / 2, stroke: "var(--muted)", "stroke-width": 1.4, "marker-end": arrow }),
+    S("text", { x: 14, y: y0 + ch / 2 + 22, "font-size": 10, fill: "var(--muted)", text: "out" }));
+  const outBit = S("text", { x: 22, y: y0 + ch / 2 - 8, "font-size": 13, fill: "var(--signal)", "font-weight": 600, text: "" });
+  svg.append(outBit);
+  box.append($("div", { class: "svgbox" }, svg));
+  box.append($("div", { class: "readout" }, $("b", { text: d.rec }), "   (", "+ is XOR)"));
+
+  const ks = $("div", { class: "ks", "aria-live": "polite" });
+  const read = $("div", { class: "readout" });
+
+  // cycle rings
+  const ringNodes = new Map();
+  const rings = $("div", { class: "rings" });
+  const labelled = L <= 6;
+  d.cycles.forEach((cyc, ci) => {
+    const n = cyc.length, gap = labelled ? 40 : 10;
+    let R = n === 1 ? 0 : Math.max(labelled ? 30 : 16, (n * gap) / (2 * Math.PI));
+    if (!labelled) R = Math.min(R, 120);
+    const nodeR = labelled ? 15 : Math.max(1.2, Math.min(3.2, n > 1 ? Math.PI * R / n * 0.7 : 3.2));
+    const pad = labelled ? 22 : 8, size = 2 * (R + nodeR + pad);
+    const g = S("svg", { viewBox: `0 0 ${size} ${size + (n === 1 ? 10 : 0)}`, width: size, height: size + (n === 1 ? 10 : 0), role: "img", "aria-label": `cycle of length ${n}` });
+    const cx = size / 2, cy = size / 2 + (n === 1 ? 8 : 0);
+    const pos = cyc.map((s, k) => { const a = -Math.PI / 2 + (2 * Math.PI * k) / n; return [cx + R * Math.cos(a), cy + R * Math.sin(a)]; });
+    if (n === 1) g.append(S("circle", { cx: cx, cy: cy - nodeR - 6, r: 7, fill: "none", stroke: "var(--muted)" }));
+    else for (let k = 0; k < n; k++) {
+      const [ax, ay] = pos[k], [bx, by] = pos[(k + 1) % n], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+      const sh = nodeR + 2;
+      g.append(S("line", { x1: ax + dx / len * sh, y1: ay + dy / len * sh, x2: bx - dx / len * (sh + 1), y2: by - dy / len * (sh + 1), stroke: "var(--muted)", "stroke-width": 1, "marker-end": labelled ? arrow : "" }));
+    }
+    if (labelled) g.insertBefore(defs.cloneNode(true), g.firstChild);
+    cyc.forEach((s, k) => {
+      const c = S("circle", { cx: pos[k][0], cy: pos[k][1], r: nodeR, fill: "var(--panel)", stroke: s === 0 ? "var(--muted)" : "var(--ink)", "stroke-width": 1 });
+      const node = S("g", { style: "cursor:pointer", tabindex: "0" }, c);
+      if (labelled) node.append(S("text", { x: pos[k][0], y: pos[k][1] + 3.5, "text-anchor": "middle", "font-size": L <= 4 ? 9 : 7.5, fill: "var(--ink)", text: bin(s, L) }));
+      node.append(S("title", { text: bin(s, L) + " — click to start here" }));
+      node.addEventListener("click", () => { ctl.stop(); start = s; reset(); });
+      node.addEventListener("keydown", e => { if (e.key === "Enter") { ctl.stop(); start = s; reset(); } });
+      g.append(node);
+      ringNodes.set(s, c);
+    });
+    rings.append($("figure", {}, g, $("figcaption", { text: `length ${n}` })));
+  });
+
+  let start = d.seed, state = start, out = "", steps = 0;
+  function paint(prev) {
+    for (let i = 0; i < L; i++) {
+      const b = (state >> (L - 1 - i)) & 1;
+      texts[i].textContent = b;
+      cells[i].setAttribute("fill", b ? "var(--signal-soft)" : "var(--panel)");
+      cells[i].setAttribute("stroke", b ? "var(--signal)" : "var(--ink)");
+    }
+    for (const [s, c] of ringNodes) { c.setAttribute("fill", s === state ? "var(--signal)" : "var(--panel)"); }
+    for (const [s, c] of ringNodes) {
+      const t = c.nextSibling; if (t && t.tagName === "text") t.setAttribute("fill", s === state ? "var(--panel)" : "var(--ink)");
+    }
+    const nb = next(state) & 1;
+    newBit.textContent = nb;
+    outBit.textContent = steps ? out[out.length - 1] : "";
+    read.replaceChildren("state ", $("b", { text: bin(state, L) }), `   step ${steps}   next ${bin(next(state), L)}` + (steps && state === start ? "   ← back at the seed: period " + steps : ""));
+    ks.textContent = "keystream  " + (out || "·");
+  }
+  function reset() { state = start; out = ""; steps = 0; ctl.set(0); paint(); }
+  const ctl = player(() => { out += (state >> (L - 1)) & 1; state = next(state); steps++; paint(); }, reset, () => null);
+  box.append(ctl.el, read, ks);
+  if (d.cycles.length) {
+    box.append($("div", { class: "readout", text: labelled ? "State diagram: click a state to start the register there." : "State diagram (states too many to label): click a dot to start there." }));
+    box.append(rings);
+  }
+  if (d.tails) box.append($("div", { class: "readout", text: `${d.tails} states lie on no cycle (c0 = 0); they are not drawn.` }));
+  paint();
+  return box;
+}
+
+/* ---------- square-and-multiply ---------- */
+function vizModpow(d) {
+  const box = $("div", { class: "viz" });
+  const bits = $("div", { class: "bits" });
+  const cells = [...d.bits].map(b => $("span", { class: b === "1" ? "one" : "", text: b }));
+  cells.forEach(c => bits.append(c));
+  const read = $("div", { class: "readout", "aria-live": "polite" });
+  let table = null;
+  function show(i) {
+    cells.forEach((c, k) => { c.classList.toggle("cur", k === i - 1); c.classList.toggle("done", k < i - 1); });
+    if (table) table.querySelectorAll("tbody tr").forEach((r, k) => r.classList.toggle("cur", k === i - 1));
+    if (i === 0) { read.replaceChildren("r = ", $("b", { text: "1" }), `   exponent ${d.e} = ${d.bits}₂, base ${d.a}, mod ${d.n}`); return; }
+    const s = d.steps[i - 1];
+    read.replaceChildren(`bit ${s.bit}:  r² = ${s.from}² = ${s.sq}` + (s.bit ? `,  × ${d.a} = ${s.r}` : "  (bit 0: no multiply)") + "   r = ", $("b", { text: String(s.r) }),
+      i === d.steps.length ? `   ⇒ ${d.a}^${d.e} mod ${d.n} = ${s.r}` : "");
+  }
+  const ctl = player(i => show(i), () => show(0), () => d.steps.length);
+  box.append(bits, ctl.el, read);
+  show(0);
+  return { box, hook: t => { table = t; } };
+}
+
+/* ---------- elliptic curve ---------- */
+function vizECC(d) {
+  const box = $("div", { class: "viz" });
+  if (!d.points) return box;
+  const p = d.p, cell = Math.max(6, Math.min(34, Math.floor(480 / p))), m = 30;
+  const W = m + p * cell + 12, H = p * cell + m + 10;
+  const X = x => m + x * cell + cell / 2, Y = y => (p - 1 - y) * cell + cell / 2 + 6;
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "points of the curve" });
+  if (p <= 61) for (let i = 0; i <= p; i++) {
+    svg.append(S("line", { x1: m + i * cell, y1: 6, x2: m + i * cell, y2: 6 + p * cell, stroke: "var(--rule)", "stroke-width": 0.6 }));
+    svg.append(S("line", { x1: m, y1: 6 + i * cell, x2: m + p * cell, y2: 6 + i * cell, stroke: "var(--rule)", "stroke-width": 0.6 }));
+  }
+  const tick = Math.max(1, Math.ceil(p / 12));
+  for (let i = 0; i < p; i += tick) {
+    svg.append(S("text", { x: X(i), y: H - 8, "text-anchor": "middle", "font-size": 9.5, fill: "var(--muted)", text: i }));
+    svg.append(S("text", { x: m - 6, y: Y(i) + 3, "text-anchor": "end", "font-size": 9.5, fill: "var(--muted)", text: i }));
+  }
+  const layer = S("g"), top = S("g");
+  svg.append(layer);
+  for (const [x, y] of d.points) svg.append(S("circle", { cx: X(x), cy: Y(y), r: Math.max(2.2, cell * 0.2), fill: "var(--muted)" }));
+  svg.append(top);
+  const marks = [];
+  const mark = (pt, label, color, big) => {
+    if (!pt || pt === "O") return;
+    const same = marks.find(q => q.x === pt[0] && q.y === pt[1]);
+    if (same) { same.t.textContent += " = " + label; return; }
+    top.append(S("circle", { cx: X(pt[0]), cy: Y(pt[1]), r: Math.max(4, cell * (big ? 0.38 : 0.3)), fill: color, stroke: "var(--panel)", "stroke-width": 1.5 }));
+    const t = S("text", { x: X(pt[0]) + cell * 0.45 + 3, y: Y(pt[1]) - cell * 0.35 - 2, "font-size": 11, "font-weight": 600, fill: color, text: label });
+    top.append(t);
+    marks.push({ x: pt[0], y: pt[1], t });
+  };
+  const read = $("div", { class: "readout" });
+  if (d.op === "add" || d.op === "double") {
+    const P = d.P, Q = d.op === "double" ? d.P : d.Q;
+    let lam = null;
+    if (d.op === "double") { const iv = inv(2 * P[1], p); if (iv != null) lam = mod((3 * P[0] * P[0] + d.a) * iv, p); }
+    else if (P[0] !== Q[0]) lam = mod((Q[1] - P[1]) * inv(Q[0] - P[0], p), p);
+    if (lam != null) {
+      // the line y = lam (x - x1) + y1 taken mod p: it wraps around the grid
+      for (let x = 0; x < p; x++) {
+        const y = mod(lam * (x - P[0]) + P[1], p);
+        layer.append(S("rect", { x: X(x) - cell * 0.18, y: Y(y) - cell * 0.18, width: cell * 0.36, height: cell * 0.36, fill: "var(--accent)", opacity: 0.35, transform: `rotate(45 ${X(x)} ${Y(y)})` }));
+      }
+      if (d.R !== "O") {
+        const neg = [d.R[0], mod(-d.R[1], p)];
+        layer.append(S("line", { x1: X(neg[0]), y1: Y(neg[1]), x2: X(d.R[0]), y2: Y(d.R[1]), stroke: "var(--signal)", "stroke-dasharray": "4 3", "stroke-width": 1.4 }));
+        var negR = neg;
+      }
+      read.textContent = `λ = ${lam}: the ${d.op === "double" ? "tangent" : "line through P and Q"} is y = ${lam}(x − ${P[0]}) + ${P[1]} (mod ${p}), drawn as diamonds. It meets the curve a third time at −R; reflecting (y → −y) gives R.`;
+    } else read.textContent = "The line is vertical, so the sum is O, the point at infinity.";
+    mark(P, "P", "var(--ink)");
+    if (d.op === "add") mark(Q, "Q", "var(--ink)");
+    mark(d.R, d.op === "double" ? "2P" : "R = P+Q", "var(--signal)", true);
+    if (typeof negR !== "undefined") mark(negR, "−R", "var(--accent)");
+    box.append($("div", { class: "svgbox" }, svg), read);
+  } else if (d.op === "mul" && d.multiples) {
+    const pts = d.multiples.filter(q => q !== "O");
+    const path = S("polyline", { fill: "none", stroke: "var(--accent)", "stroke-width": 1.2, opacity: 0.7, points: "" });
+    layer.append(path);
+    const show = i => {
+      top.replaceChildren(); marks.length = 0;
+      path.setAttribute("points", pts.slice(0, i).map(q => `${X(q[0])},${Y(q[1])}`).join(" "));
+      mark(d.P, "P", "var(--ink)");
+      if (i > 0 && i <= pts.length) mark(pts[i - 1], i + "P", "var(--signal)", true);
+      read.textContent = i === 0 ? `Step through k·P = P + P + … for P = (${d.P})` :
+        i <= pts.length ? `${i}P = (${pts[i - 1].join(", ")})` : `${i}P = O: the order of P is ${i}`;
+    };
+    const total = pts.length + (d.multiples[d.multiples.length - 1] === "O" ? 1 : 0);
+    const ctl = player(show, () => show(0), () => total);
+    box.append($("div", { class: "svgbox" }, svg), ctl.el, read);
+    show(0);
+  } else box.append($("div", { class: "svgbox" }, svg));
+  return box;
+}
+
+/* ---------- block cipher modes ---------- */
+function vizModes(d) {
+  const box = $("div", { class: "viz" });
+  const hex = x => x.toString(16).padStart(4, "0");
+  const t = $("table");
+  const head = $("tr", {}, $("th", { text: "" }));
+  d.P.forEach((p, j) => head.append($("th", {}, (j === d.flip[0] ? $("span", { class: "flipmark", text: "⚡ " }) : ""), `P${j + 1}`, $("div", { style: "font-family:var(--mono);text-transform:none;letter-spacing:0", text: d.labels[j] || hex(p) }))));
+  t.append($("thead", {}, head));
+  const tb = $("tbody");
+  for (const md of d.modes) {
+    const tr = $("tr", {}, $("td", { class: "mn", text: md.name }));
+    md.P2.forEach((v, j) => {
+      const diff = v ^ d.P[j], e = md.effect[j];
+      const cls = e === "ok" ? "ok" : e.startsWith("garbled") ? "bad" : "warn";
+      const strip = $("div", { class: "strip", "aria-hidden": "true" });
+      for (let b = 15; b >= 0; b--) strip.append($("i", { class: (diff >> b) & 1 ? "d" : "" }));
+      tr.append($("td", {}, $("div", { class: "cell " + cls, title: `${md.name} block ${j + 1}: Bob gets ${hex(v)} (sent ${hex(d.P[j])}) — ${e}` },
+        $("span", { style: "font:12px var(--mono)", text: hex(v) }), strip)));
+    });
+    tb.append(tr);
+  }
+  t.append(tb);
+  box.append($("div", { class: "modes" }, t));
+  box.append($("div", { class: "legend" },
+    $("span", {}, $("i", { style: "background:var(--ok-soft);border:1px solid var(--ok)" }), "block correct"),
+    $("span", {}, $("i", { style: "background:var(--warn-soft);border:1px solid var(--warn)" }), "one bit wrong"),
+    $("span", {}, $("i", { style: "background:var(--bad-soft);border:1px solid var(--bad)" }), "block garbled"),
+    $("span", {}, $("i", { style: "background:var(--bad)" }), "wrong bits in the 16-bit block"),
+    $("span", { class: "flipmark", text: `⚡ bit ${d.flip[1]} of block ${d.flip[0] + 1} flipped ${d.transit ? "in transit" : "inside Alice's machine"}` })));
+  return box;
+}
+
+/* ---------- feed ---------- */
+const feed = document.getElementById("feed");
+const KIND = { lfsr: "LFSR", modpow: "Modular power", egcd: "Euclid", phi: "Totient", rsa: "RSA", dh: "Diffie–Hellman",
+  elgamal: "ElGamal", dsa: "DSA", ecc: "Elliptic curve", modes: "Block modes" };
+CRIB.items.forEach((it, idx) => {
+  if (it.type === "text") {
+    const c = $("div", { class: "console" });
+    let prev = -1;
+    for (const l of it.lines) {
+      const cls = l.text.startsWith("[ok]") ? "ok" : l.text.startsWith("[FAIL]") ? "bad" : "";
+      c.append($("div", {}, l.line !== prev ? lnButton(l.line) : $("span"), $("span", { class: cls, text: l.text })));
+      prev = l.line;
+    }
+    feed.append(c);
+    return;
+  }
+  const d = it.data || {};
+  d._id = idx;
+  const card = $("section", { class: "sim", id: "sim" + idx },
+    $("header", {}, $("span", { class: "kind", text: KIND[it.type] || it.type }), $("h2", { text: it.title })),
+    $("div", { class: "src" }, lnButton(it.line), $("code", { text: it.code })));
+  let hook = null;
+  if (it.type === "lfsr") card.append(vizLFSR(d));
+  else if (it.type === "modpow") { const v = vizModpow(d); card.append(v.box); hook = v.hook; }
+  else if (it.type === "ecc") card.append(vizECC(d));
+  else if (it.type === "modes") card.append(vizModes(d));
+  const lines = it.type === "modes" ? it.lines.filter(l => l.k !== "table") : it.lines;
+  card.append(renderLines(lines, hook));
+  feed.append(card);
+});
+</script>
+</body>
+</html>

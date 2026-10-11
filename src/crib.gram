@@ -1,0 +1,83 @@
+# Crib - a small language for the maths of a cryptography course
+# (crib.c). Semicolons are optional; `#` and `//` start comments.
+
+program  <- stmt* ;
+stmt     <^ fn / if / while / for / return / sim / show / print / check
+          / assign / exprstmt ;
+
+fn       <- ~FN ident params (~'=' expr / block) ~';'? ;
+params   <- ~'(' (ident (~',' ident)*)? ~')' ;
+assign   <- ident (~',' ident)* ~'=' !'=' expr ~';'? ;
+if       <- ~IF expr block (~ELSE (if / block))? ;
+while    <- ~WHILE expr block ;
+for      <- ~FOR ident ~IN expr ~'..' expr block ;
+return   <- ~RETURN expr? ~';'? ;
+sim      <- ~SIM ident ~'(' (arg (~',' arg)*)? ~')' ~';'? ;
+arg      <^ named / expr ;
+named    <- ident ~'=' !'=' expr ;
+show     <- ~SHOW expr (~',' expr)* ~';'? ;
+print    <- ~PRINT expr (~',' expr)* ~';'? ;
+check    <- ~CHECK expr ~';'? ;
+block    <- ~'{' stmt* ~'}' ;
+exprstmt <- expr ~';'? ;
+
+# Expressions, loosest first. `mod` binds looser than + - * so that
+# `t * r^-a mod p` means (t * r^-a) mod p, as on paper. Everything to the
+# left of `mod` is then computed modulo p: ^ uses square-and-multiply,
+# a negative power is an inverse and / multiplies by an inverse.
+expr     <^ or ;
+or       <^ and (~OR and)* ;
+and      <^ notx (~AND notx)* ;
+notx     <^ not / cmp ;
+not      <- ~NOT notx ;
+cmp      <^ modx (cmpop modx)? ;
+modx     <^ xorx (~MOD xorx)? ;
+xorx     <^ sum (~XOR sum)* ;
+sum      <^ prod (addop prod)* ;
+prod     <^ unary (mulop unary)* ;
+unary    <^ neg / pow ;
+neg      <- ~'-' unary ;
+pow      <^ postfix (~'^' unary)? ;
+postfix  <^ atom index* ;
+index    <- ~'[' expr ~']' ;
+atom     <^ number / string / poly / call / list / ident / paren ;
+paren    <- ~'(' expr (~',' expr)* ~')' ;
+list     <- ~'[' (expr (~',' expr)*)? ~']' ;
+call     <- ident ~'(' (expr (~',' expr)*)? ~')' ;
+
+# A polynomial over GF(2), for LFSRs: poly(x^4 + x + 1)
+poly     <- ~POLY ~'(' pterm (~'+' pterm)* ~')' ;
+pterm    <- X (~'^' number)? / number ;
+
+# Tokens
+cmpop    <= '==' / '!=' / '<=' / '>=' / '<' / '>' ;
+addop    <= [+\-] ;
+mulop    <= [*/%] ;
+number   <= '0x' [0-9a-fA-F]+ / '0b' [01]+ / [0-9]+ ;
+string   <= '"' ('\\' . / [^"\\])* '"' ;
+ident    <= !keyword [A-Za-z_] idc* ;
+
+keyword  <= ('fn' / 'if' / 'else' / 'while' / 'for' / 'in' / 'return' / 'sim'
+            / 'show' / 'print' / 'check' / 'mod' / 'xor' / 'and' / 'or'
+            / 'not' / 'poly') !idc ;
+FN       <= 'fn' !idc ;
+IF       <= 'if' !idc ;
+ELSE     <= 'else' !idc ;
+WHILE    <= 'while' !idc ;
+FOR      <= 'for' !idc ;
+IN       <= 'in' !idc ;
+RETURN   <= 'return' !idc ;
+SIM      <= 'sim' !idc ;
+SHOW     <= 'show' !idc ;
+PRINT    <= 'print' !idc ;
+CHECK    <= 'check' !idc ;
+MOD      <= 'mod' !idc ;
+XOR      <= 'xor' !idc ;
+AND      <= 'and' !idc ;
+OR       <= 'or' !idc ;
+NOT      <= 'not' !idc ;
+POLY     <= 'poly' !idc ;
+X        <= 'x' !idc ;
+idc      <= [A-Za-z0-9_] ;
+
+skip     <= ([ \t\r\n] / '#' [^\n]* / '//' [^\n]*)* ;

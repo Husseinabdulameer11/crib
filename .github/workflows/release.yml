@@ -1,0 +1,238 @@
+name: release
+
+# Push a tag like v0.1.0 and this builds, tests and publishes everything:
+#
+#   GitHub release v0.1.0 with
+#     crib-windows-setup.exe        Windows installer (adds crib to PATH)
+#     crib-windows-x86_64.zip       Windows, no installer
+#     crib-linux-x86_64.tar.gz      Linux (static, any distro)
+#     crib-linux-aarch64.tar.gz     Linux on ARM (Raspberry Pi 4/5, ARM servers)
+#     crib-macos-universal.tar.gz   macOS, Intel and Apple silicon
+#     SHA256SUMS                    checksums (install.sh verifies them)
+#   ghcr.io/<owner>/crib:0.1.0 and :latest   Docker image, amd64 + arm64
+#
+# Run it by hand from the Actions tab ("Run workflow") for a dry run: it
+# builds and tests everything and keeps the files as workflow artifacts, but
+# publishes nothing.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the release
+  packages: write   # push the Docker image to ghcr.io
+
+env:
+  # gram lives in its own repository; every build checks it out into gram-src.
+  GRAM_REPO: ${{ github.repository_owner }}/gram
+  GRAM_REF: main
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            v=${GITHUB_REF_NAME#v}
+            if ! printf '%s\n' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+              echo "::error::tag $GITHUB_REF_NAME is not like v1.2.3"; exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            v=0.0.0-dev.${GITHUB_SHA::7}
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Crib version: $v"
+
+  linux:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", ref: "${{ env.GRAM_REF }}", path: gram-src }
+      - if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+      # Built inside Alpine (musl) and linked statically: one binary that runs
+      # on every Linux distribution, old or new.
+      - name: Build and test (static, Alpine)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            -v "$PWD:/src" -w /src -e VERSION alpine:3.20 sh -c '
+              apk add --no-cache build-base diffutils &&
+              make test GRAM=gram-src VERSION="$VERSION" LDFLAGS=-static &&
+              strip build/crib'
+          file build/crib
+          file build/crib | grep -q static   # "statically linked" or "static-pie linked"
+      - run: sh packaging/package.sh linux-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crib-linux-${{ matrix.arch }}
+          path: dist/crib-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", ref: "${{ env.GRAM_REF }}", path: gram-src }
+      # One "universal" binary with both Intel and Apple silicon code in it.
+      - name: Build and test (universal)
+        run: |
+          make test GRAM=gram-src VERSION=${{ needs.version.outputs.version }} \
+            CFLAGS="-O2 -arch arm64 -arch x86_64 -mmacosx-version-min=11.0"
+          strip build/crib
+          lipo -info build/crib
+          lipo -info build/crib | grep -q x86_64
+          lipo -info build/crib | grep -q arm64
+      - run: sh packaging/package.sh macos-universal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crib-macos-universal
+          path: dist/crib-macos-universal.tar.gz
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", ref: "${{ env.GRAM_REF }}", path: gram-src }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make diffutils zip mingw-w64-ucrt-x86_64-gcc
+      # -static: crib.exe needs no MSYS2 DLLs, only what Windows 10+ has.
+      - name: Build and test
+        shell: msys2 {0}
+        run: |
+          make test GRAM=gram-src VERSION=${{ needs.version.outputs.version }} LDFLAGS=-static
+          strip build/crib.exe
+          echo "DLLs crib.exe needs:"; ldd build/crib.exe
+          if ldd build/crib.exe | grep -qi ucrt64; then
+            echo "::error::crib.exe depends on MSYS2 DLLs"; exit 1
+          fi
+          sh packaging/package.sh windows-x86_64
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco upgrade innosetup -y --no-progress   # installs it, or updates to 6.3+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc /DAppVersion=${{ needs.version.outputs.version }} `
+                  /DRepo=${{ github.repository }} packaging\windows\crib.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke-test the installer
+        shell: pwsh
+        run: |
+          Start-Process dist\crib-windows-setup.exe -Wait -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/CURRENTUSER'
+          $bin = "$env:LOCALAPPDATA\Programs\Crib\bin"
+          & "$bin\crib.exe" --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (-not ($userPath -split ';' -contains $bin)) { Write-Error "crib was not added to PATH"; exit 1 }
+          # the uninstaller re-launches itself from %TEMP%, so -Wait returns early: poll
+          Start-Process "$env:LOCALAPPDATA\Programs\Crib\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES'
+          for ($i = 0; $i -lt 60 -and (Test-Path "$bin\crib.exe"); $i++) { Start-Sleep 1 }
+          Start-Sleep 2
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -split ';' -contains $bin) { Write-Error "uninstall left crib on PATH"; exit 1 }
+          if (Test-Path "$bin\crib.exe") { Write-Error "uninstall left crib.exe behind"; exit 1 }
+          Write-Output "installer ok: installs, adds to PATH, uninstalls cleanly"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crib-windows
+          path: |
+            dist/crib-windows-x86_64.zip
+            dist/crib-windows-setup.exe
+          if-no-files-found: error
+
+  docker:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", ref: "${{ env.GRAM_REF }}", path: gram-src }
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"   # ghcr needs lower case
+      - if: needs.version.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-contexts: gram=./gram-src
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ needs.version.outputs.version }}
+          push: ${{ needs.version.outputs.publish == 'true' }}
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ needs.version.outputs.version }}
+            ${{ steps.image.outputs.name }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+
+  release:
+    needs: [version, linux, macos, windows, docker]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          image=ghcr.io/${REPO,,}
+          cat > notes.md <<EOF
+          ## Install
+
+          **Windows:** download **crib-windows-setup.exe** below and run it. It adds \`crib\` to your PATH; open a new terminal and run \`crib --help\`.
+
+          **macOS / Linux:**
+          \`\`\`
+          curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh
+          \`\`\`
+
+          **Docker** (any OS), in the folder with your .crib files:
+          \`\`\`
+          docker run --rm -v "\${PWD}:/work" $image:$V exam.crib
+          \`\`\`
+
+          Or open the repository in GitHub Codespaces: Crib and gram come ready to use and to extend.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$REPO" --title "Crib $V" --notes-file notes.md --generate-notes --verify-tag

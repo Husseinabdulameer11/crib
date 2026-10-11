@@ -1,0 +1,55 @@
+name: ci
+
+# Crib builds with gram, which lives in its own repository (assumed to be
+# <same owner>/gram). CI checks it out into ./gram-src and passes GRAM=, and
+# one job tests the `make install` route instead.
+env:
+  GRAM_REPO: ${{ github.repository_owner }}/gram
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", path: gram-src }
+      - run: make test CC=${{ matrix.cc }} GRAM=gram-src
+
+  linux-installed-gram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", path: gram-src }
+      - run: make -C gram-src install PREFIX="$HOME/.local"
+      - run: PATH=$HOME/.local/bin:$PATH make test
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", path: gram-src }
+      - run: make test GRAM=gram-src
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: "${{ env.GRAM_REPO }}", path: gram-src }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc
+      - run: make test GRAM=gram-src

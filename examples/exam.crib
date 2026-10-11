@@ -1,0 +1,109 @@
+# CS4210 Part II problems, worked by machine.
+# Every number below is the one printed in the booklet; `check` confirms it.
+#
+#   crib exam.crib                      text in the terminal
+#   crib --html exam.html exam.crib     the same, animated, in a browser
+
+# ---------------------------------------------------------------------------
+# LFSR: state diagram, period, cycles          (2022, 2023, 2024, 2025)
+# f(x) = x^4 + c3 x^3 + c2 x^2 + c1 x + c0  =>  s[n+4] = c3 s[n+3] + ... + c0 s[n]
+
+sim lfsr(poly(x^4 + x^2 + 1))               # 2022, 2025: 4 cycles, period 6
+sim lfsr(poly(x^4 + x^3 + x + 1))           # 2023: 6 cycles, max period 6
+sim lfsr(poly(x^4 + x + 1), seed = 0b0001)  # 2024: primitive, period 15
+
+check poly(x^4 + x^2 + 1) == poly(x^2 + x + 1)^2
+check poly(x^4 + x^3 + x + 1) == poly(x + 1)^2 * poly(x^2 + x + 1)
+
+# ---------------------------------------------------------------------------
+# ElGamal decryption: m = t * r^-a mod p   (hint given on the paper)
+
+sim elgamal(p = 17, alpha = 3, a = 6, r = 7, t = 6)     # 2022
+sim elgamal(p = 19, alpha = 3, a = 5, r = 9, t = 17)    # 2023 / 2025
+
+# The same in plain Crib: everything left of `mod` is computed mod p
+p = 17; alpha = 3; a = 6
+r = 7; t = 6
+check t * r^-a mod p == 12
+check alpha^11 mod p == r and (alpha^a)^11 * 12 mod p == t
+
+# Nonce misuse: ElGamal signature with k = a. Then r = alpha^a = beta, and
+# from s = a^-1 (m - a r) we get a = m (s + r)^-1 mod (p - 1).
+p = 19; alpha = 2; a = 5; m = 5
+k = a
+r = alpha^k mod p
+s = k^-1 * (m - a * r) mod (p - 1)
+show r, s
+check r == alpha^a mod p                    # Eve sees r = beta
+check gcd(s + r, p - 1) == 1                # (if not, test the few candidates)
+check m * (s + r)^-1 mod (p - 1) == a       # ... and recovers a
+
+sim elgamal_sign(p = 19, alpha = 2, a = 5, k = 7, m = 10)
+
+# DSA with a leaked k: x = (s k - H) r^-1 mod q
+sim dsa(p = 23, q = 11, h = 2, x = 3, k = 7, H = 5)
+
+# ---------------------------------------------------------------------------
+# RSA
+
+sim rsa(p = 13, q = 17, e = 7, m = 36)
+
+# Double encryption gains nothing: (m^e1)^e2 = m^(e1 e2)
+n = 221; m = 36
+check (m^5 mod n)^7 mod n == m^35 mod n
+
+# Faulty machine: c_A - c_B = 0 (mod p) and -1 (mod q)  =>  gcd(c_A - c_B, n) = p
+show gcd(13 * 5, 221)
+
+# Small e, small M: M^e < n means C = M^e over the integers; take the e-th root
+C = 42^3
+show root(C, 3)
+
+# 4^100003 mod 33 with Euler: phi(33) = 20, 100003 = 5000 * 20 + 3
+sim modpow(4, 100003, 33)
+check 4^100003 mod 33 == 4^3 mod 33
+
+# 7 d + 192 y = 1
+sim inverse(7, 192)
+
+# ---------------------------------------------------------------------------
+# ECC point arithmetic on y^2 = x^3 + ax + b (mod p)
+
+sim ecc(a = 0, b = -2, p = 7, P = (3, 2), Q = (5, 5))   # 2024: (3, 5)
+sim ecc(a = 0, b = -2, p = 7, P = (3, 2))               # 2024: 2(3,2) = (5, 2)
+sim ecc(a = 1, b = 3, p = 7, P = (4, 1), Q = (5, 0))    # 2025: (6, 1)
+sim ecc(a = 1, b = 3, p = 7, P = (6, 1))                # 2025: 2(6,1) = (6, 6)
+
+# lambda by hand: division is multiplication by an inverse mod p
+check (5 - 2) / (5 - 3) mod 7 == 5
+check ecadd((3, 2), (5, 5), 0, 7) == (3, 5)
+check ecmul(2, (6, 1), 1, 7) == (6, 6)
+
+# A bigger curve: walk the multiples of P until O
+sim ecc(a = 2, b = 2, p = 17, P = (5, 1), k = 20)
+
+# ---------------------------------------------------------------------------
+# Modes of operation: one bit error, how much is recovered   (2024, 2025)
+
+sim modes(text = "ATTACK AT DAWN!!", flip = (2, 3), at = "encrypt")
+sim modes(text = "ATTACK AT DAWN!!", flip = (2, 3))
+
+# CTR bit flip: C' = C xor delta gives P' = P xor delta
+# byte "1" (0x31) becomes "9" (0x39) by XOR with 1 xor 9 = 0x08
+show hex(0x31 xor 0x08), hex(1 xor 9)
+
+# OFB with a fixed IV (2023): the same keystream every time, so a known
+# pair (P, C) gives O = C xor P, and any other C' decrypts as C' xor O
+O = 0b11010101 xor 0b01111001
+show bin(O, 8), bin(0b01010010 xor O, 8)
+check 0b01010010 xor O == 0b11111110
+
+# ---------------------------------------------------------------------------
+# Discrete-log questions: h(x) = alpha^x mod p as a "hash" collides trivially
+
+fn h(x) = 2^x mod 101
+check h(7) == h(7 + 100)         # Fermat: period p - 1
+check h(3 + 4) == h(3) * h(4) mod 101
+
+# Diffie-Hellman
+sim dh(p = 23, g = 5, x = 6, y = 15)

@@ -1,0 +1,381 @@
+
+=== LFSR   f(x) = x^4 + x^2 + 1 ===
+  recurrence s[n+4] = s[n+2] + s[n]   (mod 2: + is XOR)
+  register   4 cells s[n] .. s[n+3]; XOR the tapped cells s[n+2], s[n] into the new bit
+  factors    x^4 + x^2 + 1 = (x^2 + x + 1)^2
+  cycle 1    length 6:  0001 -> 0010 -> 0101 -> 1010 -> 0100 -> 1000 -> 0001
+  cycle 2    length 6:  0011 -> 0111 -> 1111 -> 1110 -> 1100 -> 1001 -> 0011
+  cycle 3    length 3:  0110 -> 1101 -> 1011 -> 0110
+  cycle 4    length 1:  0000 -> 0000
+  => cycle lengths 6, 6, 3, 1  =>  4 cycles, max period 6
+  - not primitive (a primitive f would give one cycle of 2^4 - 1 = 15)
+
+=== LFSR   f(x) = x^4 + x^3 + x + 1 ===
+  recurrence s[n+4] = s[n+3] + s[n+1] + s[n]   (mod 2: + is XOR)
+  register   4 cells s[n] .. s[n+3]; XOR the tapped cells s[n+3], s[n+1], s[n] into the new bit
+  factors    x^4 + x^3 + x + 1 = (x + 1)^2(x^2 + x + 1)
+  cycle 1    length 6:  0001 -> 0011 -> 0111 -> 1110 -> 1100 -> 1000 -> 0001
+  cycle 2    length 3:  0010 -> 0100 -> 1001 -> 0010
+  cycle 3    length 3:  0110 -> 1101 -> 1011 -> 0110
+  cycle 4    length 2:  0101 -> 1010 -> 0101
+  cycle 5    length 1:  1111 -> 1111
+  cycle 6    length 1:  0000 -> 0000
+  => cycle lengths 6, 3, 3, 2, 1, 1  =>  6 cycles, max period 6
+  - not primitive (a primitive f would give one cycle of 2^4 - 1 = 15)
+
+=== LFSR   f(x) = x^4 + x + 1 ===
+  recurrence s[n+4] = s[n+1] + s[n]   (mod 2: + is XOR)
+  register   4 cells s[n] .. s[n+3]; XOR the tapped cells s[n+1], s[n] into the new bit
+  factors    x^4 + x + 1 is irreducible over GF(2)
+  cycle 1    length 15:  0001 -> 0010 -> 0100 -> 1001 -> 0011 -> 0110 -> 1101 -> 1010 -> 0101 -> 1011 -> 0111 -> 1111 -> 1110 -> 1100 -> 1000 -> 0001
+  cycle 2    length 1:  0000 -> 0000
+  => cycle lengths 15, 1  =>  2 cycles, max period 15
+  => primitive: one cycle of 2^4 - 1 = 15 states, plus {0000}
+  - run from seed 0001 (15 steps):
+     n  state  new bit  out 
+    --  -----  -------  --- 
+     0   0001        0    0 
+     1   0010        0    0 
+     2   0100        1    0 
+     3   1001        1    1 
+     4   0011        0    0 
+     5   0110        1    0 
+     6   1101        0    1 
+     7   1010        1    1 
+     8   0101        1    0 
+     9   1011        1    1 
+    10   0111        1    0 
+    11   1111        0    1 
+    12   1110        0    1 
+    13   1100        0    1 
+    14   1000        1    1 
+  => keystream: 000100110101111
+[ok]   poly(x^4 + x^2 + 1) == poly(x^2 + x + 1)^2
+[ok]   poly(x^4 + x^3 + x + 1) == poly(x + 1)^2 * poly(x^2 + x + 1)
+
+=== ElGamal   p = 17, alpha = 3, a = 6 ===
+  keys       private a = 6; public beta = alpha^a mod p = 3^6 mod 17 = 15
+  decrypt    m = t * r^-a mod p, with (r, t) = (7, 6)
+  r^a        r^a mod p = 7^6 mod 17 = 9
+  inverse    9^-1 mod 17 = 2   (9*2 mod 17 = 1)
+  => m = 6 * 2 mod 17 = 12
+  - check: alpha^11 = r, and beta^k * m = 15^11 * 12 mod 17 = 6 == t
+  - k must be fresh and secret for every message: reusing it, or k = a, reveals the key
+
+=== ElGamal   p = 19, alpha = 3, a = 5 ===
+  keys       private a = 5; public beta = alpha^a mod p = 3^5 mod 19 = 15
+  decrypt    m = t * r^-a mod p, with (r, t) = (9, 17)
+  r^a        r^a mod p = 9^5 mod 19 = 16
+  inverse    16^-1 mod 19 = 6   (16*6 mod 19 = 1)
+  => m = 17 * 6 mod 19 = 7
+  - check: alpha^2 = r, and beta^k * m = 15^2 * 7 mod 19 = 17 == t
+  - k must be fresh and secret for every message: reusing it, or k = a, reveals the key
+[ok]   t * r^-a mod p == 12
+[ok]   alpha^11 mod p == r and (alpha^a)^11 * 12 mod p == t
+r = 13
+s = 6
+[ok]   r == alpha^a mod p
+[ok]   gcd(s + r, p - 1) == 1
+[ok]   m * (s + r)^-1 mod (p - 1) == a
+
+=== ElGamal signature   p = 19, alpha = 2, a = 5 ===
+  keys       beta = alpha^a mod p = 2^5 mod 19 = 13
+  r          r = alpha^k mod p = 2^7 mod 19 = 14
+  k^-1       k^-1 mod (p-1) = 7^-1 mod 18 = 13
+  s          s = k^-1 (m - a r) mod (p-1) = 13 * (10 - 5*14) mod 18 = 12
+  => signature (r, s) = (14, 12)
+  verify     beta^r * r^s mod p = 13^14 * 14^12 mod 19 = 17
+             alpha^m mod p = 2^10 mod 19 = 17
+  => valid: both sides agree
+
+=== DSA   p = 23, q = 11 ===
+  g          g = h^((p-1)/q) mod p = 2^2 mod 23 = 4
+  keys       private x = 3; public y = g^x mod p = 4^3 mod 23 = 18
+  r          r = (g^k mod p) mod q = (4^7 mod 23 = 8) mod 11 = 8
+  s          s = k^-1 (H + x r) mod q = 8 * (5 + 3*8) mod 11 = 1
+  => signature (r, s) = (8, 1)
+  w          w = s^-1 mod q = 1
+  u1, u2     u1 = H w mod q = 5,  u2 = r w mod q = 8
+  v          v = (g^u1 * y^u2 mod p) mod q = 8
+  => valid: v == r
+  k leaked   x = (s k - H) r^-1 mod q = (1*7 - 5) * 7 mod 11 = 3
+  - so one leaked or reused k gives away the private key
+
+=== RSA   p = 13, q = 17, e = 7 ===
+  n          n = p*q = 13*17 = 221
+  phi(n)     phi(n) = (p-1)(q-1) = 12*16 = 192
+  gcd        gcd(e, phi(n)) = gcd(7, 192) = 1  ok
+  d          solve 7*d + 192*y = 1 with extended Euclid:
+    i   q    r     s   t 
+    -  --  ---  ----  -- 
+    0        7     1   0 
+    1      192     0   1 
+    2   0    7     1   0 
+    3  27    3   -27   1 
+    4   2    1    55  -2 
+    5   3    0  -192   7 
+  - each row: r = r(i-2) - q * r(i-1), same for s and t; stop at r = 0
+  d          d = 55   (check: e*d mod phi(n) = 7*55 mod 192 = 1)
+  => public key (e, n) = (7, 221);  private key d = 55
+  encrypt    C = M^e mod n = 36^7 mod 221 = 179
+  decrypt    M = C^d mod n = 179^55 mod 221 = 36
+  => decrypted 36 matches the message 36
+  - proof: e*d = k*phi(n) + 1, so M^(ed) = (M^phi(n))^k * M = M (mod n)
+[ok]   (m^5 mod n)^7 mod n == m^35 mod n
+gcd(13 * 5, 221) = 13
+root(C, 3) = 42
+
+=== Square-and-multiply   4^100003 mod 33 ===
+  phi(n)     phi(33) = 20   (33 = 3 * 11)
+  Euler      gcd(4, 33) = 1, so 4^20 = 1 (mod 33)
+  reduce     100003 = 5000 * 20 + 3   =>   4^100003 = (4^20)^5000 * 4^3 = 4^3 (mod 33)
+  shortcut   4^3 mod 33 = 31
+  exponent   100003 = 11000011010100011 in binary (17 bits); read left to right: square, and multiply by 4 on a 1
+    bit        square r^2      times a   r 
+    ---  ----  ----------  -----------  -- 
+      1  2^16     1^2 = 1    1 * 4 = 4   4 
+      1  2^15    4^2 = 16  16 * 4 = 31  31 
+      0  2^14    31^2 = 4                4 
+      0  2^13    4^2 = 16               16 
+      0  2^12   16^2 = 25               25 
+      0  2^11   25^2 = 31               31 
+      1  2^10    31^2 = 4   4 * 4 = 16  16 
+      1   2^9   16^2 = 25   25 * 4 = 1   1 
+      0   2^8     1^2 = 1                1 
+      1   2^7     1^2 = 1    1 * 4 = 4   4 
+      0   2^6    4^2 = 16               16 
+      1   2^5   16^2 = 25   25 * 4 = 1   1 
+      0   2^4     1^2 = 1                1 
+      0   2^3     1^2 = 1                1 
+      0   2^2     1^2 = 1                1 
+      1   2^1     1^2 = 1    1 * 4 = 4   4 
+      1   2^0    4^2 = 16  16 * 4 = 31  31 
+  => 4^100003 mod 33 = 31   (17 squarings + 8 multiplications instead of 100002)
+[ok]   4^100003 mod 33 == 4^3 mod 33
+
+=== Inverse of 7 mod 192 (extended Euclid) ===
+  goal       find d with 7*d + 192*y = 1; then d = 7^-1 mod 192
+    i   q    r     s   t 
+    -  --  ---  ----  -- 
+    0        7     1   0 
+    1      192     0   1 
+    2   0    7     1   0 
+    3  27    3   -27   1 
+    4   2    1    55  -2 
+    5   3    0  -192   7 
+  - each row: r = r(i-2) - q * r(i-1), same for s and t; stop at r = 0
+  result     gcd = 1,  x = 55,  y = -2
+  check      7*55 + 192*(-2) = 1
+  => 7^-1 mod 192 = 55   (check: 7*55 mod 192 = 1)
+
+=== Elliptic curve   y^2 = x^3 - 2 (mod 7) ===
+  check      4a^3 + 27b^2 = 3 (mod 7), not 0: a valid curve
+  P on curve y^2 = 4,  x^3 + ax + b = 4   ok
+  Q on curve ok
+  - adding: P + Q with P = (3, 2), Q = (5, 5)
+  lambda     (y2 - y1) / (x2 - x1) = (5 - 2) / (5 - 3) = 3 * 2^-1 = 3 * 4 = 5 (mod 7)
+  x3         lambda^2 - x1 - x2 = 5^2 - 3 - 5 = 3 (mod 7)
+  y3         lambda (x1 - x3) - y1 = 5*(3 - 3) - 2 = 5 (mod 7)
+  => P + Q = (3, 5)   (on the curve: ok)
+  points     (3, 2) (3, 5) (5, 2) (5, 5) (6, 2) (6, 5)
+  => #E = 6 points + O = 7
+
+=== Elliptic curve   y^2 = x^3 - 2 (mod 7) ===
+  check      4a^3 + 27b^2 = 3 (mod 7), not 0: a valid curve
+  P on curve y^2 = 4,  x^3 + ax + b = 4   ok
+  - doubling: 2P with P = (3, 2)
+  lambda     (3 x1^2 + a) / (2 y1) = (3*3^2 + 0) / (2*2) = 6 * 4^-1 = 6 * 2 = 5 (mod 7)
+  x3         lambda^2 - x1 - x2 = 5^2 - 3 - 3 = 5 (mod 7)
+  y3         lambda (x1 - x3) - y1 = 5*(3 - 5) - 2 = 2 (mod 7)
+  => 2P = (5, 2)   (on the curve: ok)
+  points     (3, 2) (3, 5) (5, 2) (5, 5) (6, 2) (6, 5)
+  => #E = 6 points + O = 7
+
+=== Elliptic curve   y^2 = x^3 + x + 3 (mod 7) ===
+  check      4a^3 + 27b^2 = 2 (mod 7), not 0: a valid curve
+  P on curve y^2 = 1,  x^3 + ax + b = 1   ok
+  Q on curve ok
+  - adding: P + Q with P = (4, 1), Q = (5, 0)
+  lambda     (y2 - y1) / (x2 - x1) = (0 - 1) / (5 - 4) = 6 * 1^-1 = 6 * 1 = 6 (mod 7)
+  x3         lambda^2 - x1 - x2 = 6^2 - 4 - 5 = 6 (mod 7)
+  y3         lambda (x1 - x3) - y1 = 6*(4 - 6) - 1 = 1 (mod 7)
+  => P + Q = (6, 1)   (on the curve: ok)
+  points     (4, 1) (4, 6) (5, 0) (6, 1) (6, 6)
+  => #E = 5 points + O = 6
+
+=== Elliptic curve   y^2 = x^3 + x + 3 (mod 7) ===
+  check      4a^3 + 27b^2 = 2 (mod 7), not 0: a valid curve
+  P on curve y^2 = 1,  x^3 + ax + b = 1   ok
+  - doubling: 2P with P = (6, 1)
+  lambda     (3 x1^2 + a) / (2 y1) = (3*6^2 + 1) / (2*1) = 4 * 2^-1 = 4 * 4 = 2 (mod 7)
+  x3         lambda^2 - x1 - x2 = 2^2 - 6 - 6 = 6 (mod 7)
+  y3         lambda (x1 - x3) - y1 = 2*(6 - 6) - 1 = 6 (mod 7)
+  => 2P = (6, 6)   (on the curve: ok)
+  points     (4, 1) (4, 6) (5, 0) (6, 1) (6, 6)
+  => #E = 5 points + O = 6
+[ok]   (5 - 2) / (5 - 3) mod 7 == 5
+[ok]   ecadd((3, 2), (5, 5), 0, 7) == (3, 5)
+[ok]   ecmul(2, (6, 1), 1, 7) == (6, 6)
+
+=== Elliptic curve   y^2 = x^3 + 2x + 2 (mod 17) ===
+  check      4a^3 + 27b^2 = 4 (mod 17), not 0: a valid curve
+  P on curve y^2 = 1,  x^3 + ax + b = 1   ok
+  - multiples of P = (5, 1) by repeated addition
+     i     i * P 
+    --  -------- 
+     1    (5, 1) 
+     2    (6, 3) 
+     3   (10, 6) 
+     4    (3, 1) 
+     5   (9, 16) 
+     6  (16, 13) 
+     7    (0, 6) 
+     8   (13, 7) 
+     9    (7, 6) 
+    10   (7, 11) 
+    11  (13, 10) 
+    12   (0, 11) 
+    13   (16, 4) 
+    14    (9, 1) 
+    15   (3, 16) 
+    16  (10, 11) 
+    17   (6, 14) 
+    18   (5, 16) 
+    19         O 
+  => 19 * P = O, so P has order 19
+  points     (0, 6) (0, 11) (3, 1) (3, 16) (5, 1) (5, 16) (6, 3) (6, 14) (7, 6) (7, 11) (9, 1) (9, 16) (10, 6) (10, 11) (13, 7) (13, 10) (16, 4) (16, 13)
+  => #E = 18 points + O = 19
+
+=== Modes of operation   8 blocks, bit 3 of block 2 flipped while Alice computes it ===
+  - toy 16-bit block cipher (4-round Feistel), key 2b7e, IV/nonce 1a2b; not secure, just small
+  - the error: the block-cipher output for block 2 has bit 3 flipped inside Alice's machine, and she keeps using it
+  ECB        C[j] = E(K, P[j])                         P[j] = D(K, C[j])
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    ca27        4154                ok 
+    2  5441 "TA"    d70a        d539  garbled (6 bits) 
+    3  434b "CK"    a397        434b                ok 
+    4  2041 " A"    c1b5        2041                ok 
+    5  5420 "T "    956f        5420                ok 
+    6  4441 "DA"    a43b        4441                ok 
+    7  574e "WN"    d74d        574e                ok 
+    8  2121 "!!"    c608        2121                ok 
+  CBC        C[j] = E(K, P[j] xor C[j-1]), C[0] = IV   P[j] = D(K, C[j]) xor C[j-1]
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    601c        4154                ok 
+    2  5441 "TA"    6e0a        50f9  garbled (5 bits) 
+    3  434b "CK"    9a26        434b                ok 
+    4  2041 " A"    e3aa        2041                ok 
+    5  5420 "T "    2a18        5420                ok 
+    6  4441 "DA"    575d        4441                ok 
+    7  574e "WN"    1770        574e                ok 
+    8  2121 "!!"    c705        2121                ok 
+  CFB        O[j] = E(K, C[j-1]), C[0] = IV; C[j] = P[j] xor O[j]   (full-block CFB)
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    9cf4        4154                ok 
+    2  5441 "TA"    72fa        5449  same bit flipped 
+    3  434b "CK"    fbb8        434b                ok 
+    4  2041 " A"    21f0        2041                ok 
+    5  5420 "T "    3256        5420                ok 
+    6  4441 "DA"    77a6        4441                ok 
+    7  574e "WN"    990c        574e                ok 
+    8  2121 "!!"    2020        2121                ok 
+  OFB        O[j] = E(K, O[j-1]), O[0] = IV; C[j] = P[j] xor O[j]
+    j          P  C sent  Bob gets P             effect 
+    -  ---------  ------  ----------  ----------------- 
+    1  4154 "AT"    9cf4        4154                 ok 
+    2  5441 "TA"    9461        5449   same bit flipped 
+    3  434b "CK"    22a2        cf9b   garbled (6 bits) 
+    4  2041 " A"    8f2d        4867   garbled (6 bits) 
+    5  5420 "T "    2788        063d   garbled (7 bits) 
+    6  4441 "DA"    5b93        baaf  garbled (13 bits) 
+    7  574e "WN"    8113        9df4   garbled (9 bits) 
+    8  2121 "!!"    c46c        4d85   garbled (7 bits) 
+  CTR        C[j] = P[j] xor E(K, IV + j)   (counter T[j] = IV + j)
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    9cf4        4154                ok 
+    2  5441 "TA"    ec81        5449  same bit flipped 
+    3  434b "CK"    5ec3        434b                ok 
+    4  2041 " A"    8c44        2041                ok 
+    5  5420 "T "    ec93        5420                ok 
+    6  4441 "DA"    dcaa        4441                ok 
+    7  574e "WN"    0dec        574e                ok 
+    8  2121 "!!"    e769        2121                ok 
+
+=== Modes of operation   8 blocks, bit 3 of block 2 flipped in transit ===
+  - toy 16-bit block cipher (4-round Feistel), key 2b7e, IV/nonce 1a2b; not secure, just small
+  - the error: ciphertext block C2 has bit 3 flipped on the way to Bob
+  ECB        C[j] = E(K, P[j])                         P[j] = D(K, C[j])
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    ca27        4154                ok 
+    2  5441 "TA"    d70a        d539  garbled (6 bits) 
+    3  434b "CK"    a397        434b                ok 
+    4  2041 " A"    c1b5        2041                ok 
+    5  5420 "T "    956f        5420                ok 
+    6  4441 "DA"    a43b        4441                ok 
+    7  574e "WN"    d74d        574e                ok 
+    8  2121 "!!"    c608        2121                ok 
+  CBC        C[j] = E(K, P[j] xor C[j-1]), C[0] = IV   P[j] = D(K, C[j]) xor C[j-1]
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    601c        4154                ok 
+    2  5441 "TA"    6e0a        50f9  garbled (5 bits) 
+    3  434b "CK"    4278        4343  same bit flipped 
+    4  2041 " A"    3940        2041                ok 
+    5  5420 "T "    e89e        5420                ok 
+    6  4441 "DA"    a566        4441                ok 
+    7  574e "WN"    254a        574e                ok 
+    8  2121 "!!"    ac0f        2121                ok 
+  CFB        O[j] = E(K, C[j-1]), C[0] = IV; C[j] = P[j] xor O[j]   (full-block CFB)
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    9cf4        4154                ok 
+    2  5441 "TA"    72fa        5449  same bit flipped 
+    3  434b "CK"    ff65        4796  garbled (7 bits) 
+    4  2041 " A"    f92f        2041                ok 
+    5  5420 "T "    db72        5420                ok 
+    6  4441 "DA"    cf5f        4441                ok 
+    7  574e "WN"    e004        574e                ok 
+    8  2121 "!!"    d76c        2121                ok 
+  OFB        O[j] = E(K, O[j-1]), O[0] = IV; C[j] = P[j] xor O[j]
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    9cf4        4154                ok 
+    2  5441 "TA"    9461        5449  same bit flipped 
+    3  434b "CK"    ae72        434b                ok 
+    4  2041 " A"    e70b        2041                ok 
+    5  5420 "T "    7595        5420                ok 
+    6  4441 "DA"    a57d        4441                ok 
+    7  574e "WN"    4ba9        574e                ok 
+    8  2121 "!!"    a8c8        2121                ok 
+  CTR        C[j] = P[j] xor E(K, IV + j)   (counter T[j] = IV + j)
+    j          P  C sent  Bob gets P            effect 
+    -  ---------  ------  ----------  ---------------- 
+    1  4154 "AT"    9cf4        4154                ok 
+    2  5441 "TA"    ec81        5449  same bit flipped 
+    3  434b "CK"    5ec3        434b                ok 
+    4  2041 " A"    8c44        2041                ok 
+    5  5420 "T "    ec93        5420                ok 
+    6  4441 "DA"    dcaa        4441                ok 
+    7  574e "WN"    0dec        574e                ok 
+    8  2121 "!!"    e769        2121                ok 
+hex(0x31 xor 0x08) = 39
+hex(1 xor 9) = 8
+bin(O, 8) = 10101100
+bin(0b01010010 xor O, 8) = 11111110
+[ok]   0b01010010 xor O == 0b11111110
+[ok]   h(7) == h(7 + 100)
+[ok]   h(3 + 4) == h(3) * h(4) mod 101
+
+=== Diffie-Hellman   p = 23, g = 5 ===
+  Alice      secret x = 6, sends A = g^x mod p = 5^6 mod 23 = 8
+  Bob        secret y = 15, sends B = g^y mod p = 5^15 mod 23 = 19
+  Alice      K = B^x mod p = 19^6 mod 23 = 2
+  Bob        K = A^y mod p = 8^15 mod 23 = 2
+  => shared key K = g^(xy) mod p = 2 (both sides agree)
+  - Eve sees p = 23, g = 5, A = 8, B = 19; getting K needs a discrete log
+  - plain DH is unauthenticated, so a man in the middle can run one exchange with each side
